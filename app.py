@@ -5,37 +5,41 @@ import os
 app = Flask(__name__)
 app.secret_key = 'clave_secreta_pwa_ivan'
 
-# Configuración de la base de datos 
+# Configuración de la base de datos - TUS CREDENCIALES
 DB_CONFIG = {
     'host': '185.232.14.52',
     'user': 'u760464709_22005123_usr',
     'password': 'LLK:CM#7Xi',
     'database': 'u760464709_22005123_bd',
-    'charset': 'utf8mb4',
-    'cursorclass': pymysql.cursors.DictCursor
+    'charset': 'utf8mb4'
 }
 
 def get_db_connection():
-    return pymysql.connect(**DB_CONFIG)
+    try:
+        return pymysql.connect(**DB_CONFIG)
+    except Exception as e:
+        print(f"Error conectando a BD: {e}")
+        return None
 
 # Crear tabla de rutinas si no existe
 def create_tables():
     try:
         connection = get_db_connection()
-        with connection.cursor() as cursor:
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS rutinas (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    coach VARCHAR(255) NOT NULL,
-                    descripcion TEXT NOT NULL,
-                    efectividad DOUBLE NOT NULL
-                )
-            ''')
-        connection.commit()
+        if connection:
+            with connection.cursor() as cursor:
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS rutinas (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        coach VARCHAR(255) NOT NULL,
+                        descripcion TEXT NOT NULL,
+                        efectividad DOUBLE NOT NULL
+                    )
+                ''')
+            connection.commit()
+            connection.close()
+            print("Tabla 'rutinas' creada/verificada correctamente")
     except Exception as e:
         print(f"Error creando tabla: {e}")
-    finally:
-        connection.close()
 
 # Ruta de login
 @app.route('/login', methods=['GET', 'POST'])
@@ -65,23 +69,23 @@ def rutinas():
         return redirect(url_for('login'))
     
     search = request.args.get('search', '')
+    rutinas = []
     
     try:
         connection = get_db_connection()
-        with connection.cursor() as cursor:
-            if search:
-                cursor.execute(
-                    "SELECT * FROM rutinas WHERE coach LIKE %s OR descripcion LIKE %s",
-                    (f'%{search}%', f'%{search}%')
-                )
-            else:
-                cursor.execute("SELECT * FROM rutinas")
-            rutinas = cursor.fetchall()
+        if connection:
+            with connection.cursor() as cursor:
+                if search:
+                    cursor.execute(
+                        "SELECT * FROM rutinas WHERE coach LIKE %s OR descripcion LIKE %s",
+                        (f'%{search}%', f'%{search}%')
+                    )
+                else:
+                    cursor.execute("SELECT * FROM rutinas")
+                rutinas = cursor.fetchall()
+            connection.close()
     except Exception as e:
         print(f"Error: {e}")
-        rutinas = []
-    finally:
-        connection.close()
     
     return render_template('rutinas.html', rutinas=rutinas, search=search)
 
@@ -97,15 +101,17 @@ def agregar_rutina():
         efectividad = float(data['efectividad'])
         
         connection = get_db_connection()
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "INSERT INTO rutinas (coach, descripcion, efectividad) VALUES (%s, %s, %s)",
-                (coach, descripcion, efectividad)
-            )
-        connection.commit()
-        connection.close()
-        
-        return jsonify({'success': True})
+        if connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "INSERT INTO rutinas (coach, descripcion, efectividad) VALUES (%s, %s, %s)",
+                    (coach, descripcion, efectividad)
+                )
+            connection.commit()
+            connection.close()
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False, 'error': 'Error de conexión'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
@@ -116,12 +122,14 @@ def eliminar_rutina(id):
     
     try:
         connection = get_db_connection()
-        with connection.cursor() as cursor:
-            cursor.execute("DELETE FROM rutinas WHERE id = %s", (id,))
-        connection.commit()
-        connection.close()
-        
-        return jsonify({'success': True})
+        if connection:
+            with connection.cursor() as cursor:
+                cursor.execute("DELETE FROM rutinas WHERE id = %s", (id,))
+            connection.commit()
+            connection.close()
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False, 'error': 'Error de conexión'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
@@ -137,8 +145,7 @@ def logout():
     return redirect(url_for('login'))
 
 # Inicializar tablas al inicio
-@app.before_first_request
-def init_db():
+with app.app_context():
     create_tables()
 
 if __name__ == '__main__':
