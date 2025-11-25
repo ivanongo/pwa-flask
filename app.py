@@ -3,6 +3,7 @@
 # activate.bat
 # py -m ensurepip --upgrade
 # pip install -r requirements.txt
+# Módulo de Ivan Orlando - Rutinas
 
 from functools import wraps
 from flask import Flask, render_template, request, jsonify, make_response, session
