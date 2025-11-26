@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, s
 import pymysql
 
 app = Flask(__name__)
-app.secret_key = 'clave_secreta'
+app.secret_key = 'clave_secreta_ivan'
 
 # Configuración de BD
 DB_CONFIG = {
@@ -40,17 +40,43 @@ def create_tables():
     except Exception as e:
         print(f"Error creando tabla: {e}")
 
-@app.route('/')
-def home():
-    return "¡APP FUNCIONANDO! Módulo de Ivan Orlando"
+# Ruta de login
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        
+        if username == 'pepe' and password == 'pepe':
+            session['user'] = username
+            return redirect(url_for('dashboard'))
+    
+    return "Página de Login - Usa: pepe/pepe"
 
+# Dashboard
+@app.route('/')
+@app.route('/dashboard')
+def dashboard():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    return "Dashboard - ¡Bienvenido! Ve a /rutinas"
+
+# Módulo de Rutinas
 @app.route('/rutinas')
 def rutinas():
-    return "Módulo de Rutinas - BD Configurada ✅"
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    return "Módulo de Rutinas - Login OK ✅"
 
 @app.route('/test')
 def test():
     return "✅ Test exitoso"
+
+# Logout
+@app.route('/logout')
+def logout():
+    session.pop('user', None)
+    return "Sesión cerrada"
 
 # Inicializar BD
 with app.app_context():
