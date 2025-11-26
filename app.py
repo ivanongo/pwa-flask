@@ -40,7 +40,7 @@ def create_tables():
     except Exception as e:
         print(f"Error creando tabla: {e}")
 
-# Ruta de login CON FORMULARIO HTML
+# Ruta de login
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -53,24 +53,7 @@ def login():
         else:
             return "Credenciales incorrectas. Usa: pepe/pepe"
     
-    # FORMULARIO HTML para login
-    return '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Login</title>
-    </head>
-    <body>
-        <h2>Login - Módulo de Ivan Orlando</h2>
-        <form method="POST">
-            <p>Usuario: <input type="text" name="username" value="pepe"></p>
-            <p>Contraseña: <input type="password" name="password" value="pepe"></p>
-            <button type="submit">Entrar</button>
-        </form>
-        <p><strong>Usa:</strong> pepe / pepe</p>
-    </body>
-    </html>
-    '''
+    return render_template('login.html')
 
 # Dashboard
 @app.route('/')
@@ -78,30 +61,84 @@ def login():
 def dashboard():
     if 'user' not in session:
         return redirect(url_for('login'))
-    return '''
-    <h1>Dashboard - ¡Bienvenido!</h1>
-    <p>Usuario: ''' + session['user'] + '''</p>
-    <p><a href="/rutinas">Ir a Módulo de Rutinas</a></p>
-    <p><a href="/logout">Cerrar Sesión</a></p>
-    '''
+    return render_template('dashboard.html', username=session['user'])
 
-# Módulo de Rutinas
+# MÓDULO DE RUTINAS - COMPLETO
 @app.route('/rutinas')
 def rutinas():
     if 'user' not in session:
         return redirect(url_for('login'))
-    return '''
-    <h1>Módulo de Rutinas</h1>
-    <p>¡Funcionando correctamente! ✅</p>
-    <p>Usuario: ''' + session['user'] + '''</p>
-    <p><a href="/dashboard">Volver al Dashboard</a></p>
-    '''
+    
+    search = request.args.get('search', '')
+    rutinas_list = []
+    
+    try:
+        connection = get_db_connection()
+        if connection:
+            with connection.cursor() as cursor:
+                if search:
+                    cursor.execute(
+                        "SELECT * FROM rutinas WHERE coach LIKE %s OR descripcion LIKE %s",
+                        (f'%{search}%', f'%{search}%')
+                    )
+                else:
+                    cursor.execute("SELECT * FROM rutinas")
+                rutinas_list = cursor.fetchall()
+            connection.close()
+    except Exception as e:
+        print(f"Error: {e}")
+    
+    return render_template('rutinas.html', rutinas=rutinas_list, search=search, username=session['user'])
 
+@app.route('/rutinas/agregar', methods=['POST'])
+def agregar_rutina():
+    if 'user' not in session:
+        return jsonify({'success': False, 'error': 'No autorizado'})
+    
+    try:
+        data = request.get_json()
+        coach = data['coach']
+        descripcion = data['descripcion']
+        efectividad = float(data['efectividad'])
+        
+        connection = get_db_connection()
+        if connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "INSERT INTO rutinas (coach, descripcion, efectividad) VALUES (%s, %s, %s)",
+                    (coach, descripcion, efectividad)
+                )
+            connection.commit()
+            connection.close()
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False, 'error': 'Error de conexión'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/rutinas/eliminar/<int:id>')
+def eliminar_rutina(id):
+    if 'user' not in session:
+        return jsonify({'success': False, 'error': 'No autorizado'})
+    
+    try:
+        connection = get_db_connection()
+        if connection:
+            with connection.cursor() as cursor:
+                cursor.execute("DELETE FROM rutinas WHERE id = %s", (id,))
+            connection.commit()
+            connection.close()
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False, 'error': 'Error de conexión'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+# Otras rutas
 @app.route('/test')
 def test():
     return "✅ Test exitoso"
 
-# Logout
 @app.route('/logout')
 def logout():
     session.pop('user', None)
