@@ -15,7 +15,8 @@ DB_CONFIG = {
 
 def get_db_connection():
     try:
-        return pymysql.connect(**DB_CONFIG)
+        connection = pymysql.connect(**DB_CONFIG)
+        return connection
     except Exception as e:
         print(f"Error conectando a BD: {e}")
         return None
@@ -35,10 +36,27 @@ def create_tables():
                 ''')
             connection.commit()
             connection.close()
+            print("✅ Tabla 'rutinas' creada/verificada")
     except Exception as e:
-        print(f"Error creando tabla: {e}")
+        print(f"❌ Error creando tabla: {e}")
 
-# LOGIN CON HTML INCLUIDO
+# Ruta de diagnóstico BD
+@app.route('/debug-db')
+def debug_db():
+    try:
+        connection = get_db_connection()
+        if connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1 as test")
+                result = cursor.fetchone()
+            connection.close()
+            return f"✅ Conexión BD exitosa: {result}"
+        else:
+            return "❌ No se pudo conectar a BD"
+    except Exception as e:
+        return f"❌ Error BD: {str(e)}"
+
+# LOGIN
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -62,26 +80,27 @@ def login():
     </html>
     '''
 
-# DASHBOARD CON HTML INCLUIDO
+# DASHBOARD
 @app.route('/')
 @app.route('/dashboard')
 def dashboard():
     if 'user' not in session:
         return redirect(url_for('login'))
     
-    return '''
+    return f'''
     <html>
     <body>
-        <h1>Dashboard - ¡Bienvenido ''' + session['user'] + '''!</h1>
+        <h1>Dashboard - ¡Bienvenido {session['user']}!</h1>
         <nav>
             <a href="/rutinas">Módulo de Rutinas</a> | 
+            <a href="/debug-db">Diagnóstico BD</a> | 
             <a href="/logout">Cerrar Sesión</a>
         </nav>
     </body>
     </html>
     '''
 
-# MÓDULO RUTINAS CON HTML INCLUIDO
+# MÓDULO RUTINAS
 @app.route('/rutinas')
 def rutinas():
     if 'user' not in session:
@@ -101,7 +120,7 @@ def rutinas():
                 rutinas_list = cursor.fetchall()
             connection.close()
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error obteniendo rutinas: {e}")
     
     # HTML COMPLETO DE RUTINAS
     html = f'''
@@ -109,29 +128,36 @@ def rutinas():
     <head>
         <title>Rutinas - Ivan Orlando</title>
         <style>
-            table {{ border-collapse: collapse; width: 100%; }}
+            table {{ border-collapse: collapse; width: 100%; margin: 10px 0; }}
             th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
             th {{ background-color: #f2f2f2; }}
+            input, button {{ margin: 5px; padding: 8px; }}
+            .form-container {{ background: #f9f9f9; padding: 15px; margin: 10px 0; }}
         </style>
     </head>
     <body>
         <h1>Módulo de Rutinas</h1>
         <p>Usuario: {session['user']}</p>
-        <a href="/dashboard">← Volver</a>
+        <a href="/dashboard">← Volver al Dashboard</a>
         
-        <h3>Agregar Nueva Rutina</h3>
-        <form id="formRutina">
-            <input type="text" id="coach" placeholder="Coach" required>
-            <input type="text" id="descripcion" placeholder="Descripción" required>
-            <input type="number" id="efectividad" placeholder="Efectividad" step="0.1" required>
-            <button type="submit">Agregar</button>
-        </form>
+        <div class="form-container">
+            <h3>Agregar Nueva Rutina</h3>
+            <form id="formRutina">
+                <input type="text" id="coach" placeholder="Coach" required>
+                <input type="text" id="descripcion" placeholder="Descripción" required>
+                <input type="number" id="efectividad" placeholder="Efectividad (0-100)" min="0" max="100" step="0.1" required>
+                <button type="submit">Agregar Rutina</button>
+            </form>
+        </div>
         
-        <h3>Buscar Rutinas</h3>
-        <form method="GET">
-            <input type="text" name="search" placeholder="Buscar..." value="{search}">
-            <button type="submit">Buscar</button>
-        </form>
+        <div class="form-container">
+            <h3>Buscar Rutinas</h3>
+            <form method="GET">
+                <input type="text" name="search" placeholder="Buscar por coach o descripción..." value="{search}">
+                <button type="submit">Buscar</button>
+                <a href="/rutinas">Limpiar</a>
+            </form>
+        </div>
         
         <h3>Rutinas Existentes</h3>
         {'<p>No hay rutinas registradas</p>' if not rutinas_list else '''
@@ -152,39 +178,56 @@ def rutinas():
         <script>
             document.getElementById('formRutina').addEventListener('submit', function(e) {{
                 e.preventDefault();
+                const coach = document.getElementById('coach').value;
+                const descripcion = document.getElementById('descripcion').value;
+                const efectividad = document.getElementById('efectividad').value;
+                
+                if(!coach || !descripcion || !efectividad) {{
+                    alert('Por favor completa todos los campos');
+                    return;
+                }}
+                
                 const rutina = {{
-                    coach: document.getElementById('coach').value,
-                    descripcion: document.getElementById('descripcion').value,
-                    efectividad: document.getElementById('efectividad').value
+                    coach: coach,
+                    descripcion: descripcion,
+                    efectividad: efectividad
                 }};
+                
+                console.log('Enviando:', rutina);
                 
                 fetch('/rutinas/agregar', {{
                     method: 'POST',
                     headers: {{'Content-Type': 'application/json'}},
                     body: JSON.stringify(rutina)
                 }})
-                .then(r => r.json())
+                .then(response => response.json())
                 .then(data => {{
                     if(data.success) {{
-                        alert('Rutina agregada');
+                        alert('✅ Rutina agregada correctamente');
                         location.reload();
                     }} else {{
-                        alert('Error: ' + data.error);
+                        alert('❌ Error: ' + data.error);
                     }}
+                }})
+                .catch(error => {{
+                    alert('❌ Error de conexión: ' + error);
                 }});
             }});
             
             function eliminarRutina(id) {{
-                if(confirm('¿Eliminar rutina?')) {{
+                if(confirm('¿Estás seguro de eliminar esta rutina?')) {{
                     fetch('/rutinas/eliminar/' + id)
-                        .then(r => r.json())
+                        .then(response => response.json())
                         .then(data => {{
                             if(data.success) {{
-                                alert('Rutina eliminada');
+                                alert('✅ Rutina eliminada correctamente');
                                 location.reload();
                             }} else {{
-                                alert('Error: ' + data.error);
+                                alert('❌ Error: ' + data.error);
                             }}
+                        }})
+                        .catch(error => {{
+                            alert('❌ Error de conexión: ' + error);
                         }});
                 }}
             }}
@@ -195,7 +238,7 @@ def rutinas():
     
     return html
 
-# API RUTAS
+# AGREGAR RUTINA - CORREGIDO
 @app.route('/rutinas/agregar', methods=['POST'])
 def agregar_rutina():
     if 'user' not in session:
@@ -203,19 +246,43 @@ def agregar_rutina():
     
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Datos no recibidos'})
+        
+        coach = data.get('coach', '').strip()
+        descripcion = data.get('descripcion', '').strip()
+        efectividad = data.get('efectividad', '0')
+        
+        if not coach or not descripcion:
+            return jsonify({'success': False, 'error': 'Coach y descripción son requeridos'})
+        
+        try:
+            efectividad_num = float(efectividad)
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Efectividad debe ser un número'})
+        
         connection = get_db_connection()
-        if connection:
+        if connection is None:
+            return jsonify({'success': False, 'error': 'Error de conexión a la base de datos'})
+        
+        try:
             with connection.cursor() as cursor:
                 cursor.execute(
                     "INSERT INTO rutinas (coach, descripcion, efectividad) VALUES (%s, %s, %s)",
-                    (data['coach'], data['descripcion'], float(data['efectividad']))
+                    (coach, descripcion, efectividad_num)
                 )
             connection.commit()
-            connection.close()
             return jsonify({'success': True})
+            
+        except Exception as db_error:
+            return jsonify({'success': False, 'error': f'Error en BD: {str(db_error)}'})
+        finally:
+            connection.close()
+            
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+        return jsonify({'success': False, 'error': f'Error general: {str(e)}'})
 
+# ELIMINAR RUTINA
 @app.route('/rutinas/eliminar/<int:id>')
 def eliminar_rutina(id):
     if 'user' not in session:
@@ -223,12 +290,15 @@ def eliminar_rutina(id):
     
     try:
         connection = get_db_connection()
-        if connection:
-            with connection.cursor() as cursor:
-                cursor.execute("DELETE FROM rutinas WHERE id = %s", (id,))
-            connection.commit()
-            connection.close()
-            return jsonify({'success': True})
+        if connection is None:
+            return jsonify({'success': False, 'error': 'Error de conexión a la base de datos'})
+        
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM rutinas WHERE id = %s", (id,))
+        connection.commit()
+        connection.close()
+        
+        return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
