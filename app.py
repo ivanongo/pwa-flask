@@ -40,7 +40,7 @@ def create_tables():
     except Exception as e:
         print(f"Error creando tabla: {e}")
 
-# Ruta de login
+# Ruta de login CON FORMULARIO HTML
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -50,8 +50,27 @@ def login():
         if username == 'pepe' and password == 'pepe':
             session['user'] = username
             return redirect(url_for('dashboard'))
+        else:
+            return "Credenciales incorrectas. Usa: pepe/pepe"
     
-    return "Página de Login - Usa: pepe/pepe"
+    # FORMULARIO HTML para login
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Login</title>
+    </head>
+    <body>
+        <h2>Login - Módulo de Ivan Orlando</h2>
+        <form method="POST">
+            <p>Usuario: <input type="text" name="username" value="pepe"></p>
+            <p>Contraseña: <input type="password" name="password" value="pepe"></p>
+            <button type="submit">Entrar</button>
+        </form>
+        <p><strong>Usa:</strong> pepe / pepe</p>
+    </body>
+    </html>
+    '''
 
 # Dashboard
 @app.route('/')
@@ -59,14 +78,24 @@ def login():
 def dashboard():
     if 'user' not in session:
         return redirect(url_for('login'))
-    return "Dashboard - ¡Bienvenido! Ve a /rutinas"
+    return '''
+    <h1>Dashboard - ¡Bienvenido!</h1>
+    <p>Usuario: ''' + session['user'] + '''</p>
+    <p><a href="/rutinas">Ir a Módulo de Rutinas</a></p>
+    <p><a href="/logout">Cerrar Sesión</a></p>
+    '''
 
 # Módulo de Rutinas
 @app.route('/rutinas')
 def rutinas():
     if 'user' not in session:
         return redirect(url_for('login'))
-    return "Módulo de Rutinas - Login OK ✅"
+    return '''
+    <h1>Módulo de Rutinas</h1>
+    <p>¡Funcionando correctamente! ✅</p>
+    <p>Usuario: ''' + session['user'] + '''</p>
+    <p><a href="/dashboard">Volver al Dashboard</a></p>
+    '''
 
 @app.route('/test')
 def test():
@@ -76,7 +105,7 @@ def test():
 @app.route('/logout')
 def logout():
     session.pop('user', None)
-    return "Sesión cerrada"
+    return redirect(url_for('login'))
 
 # Inicializar BD
 with app.app_context():
